@@ -46,7 +46,7 @@ export async function GET() {
 
     // Get recent articles
     const recentArticles = await articles.find().sort({ createdAt: -1 }).limit(5).toArray()
-    console.log(`Recent articles: ${recentArticles.length}`)
+    // console.log(`Recent articles: ${recentArticles.length}`)
 
     const result = {
       totalArticles,

@@ -48,6 +48,12 @@ const menuItems = [
     url: "/about",
     icon: Info,
   },
+  {
+    title: "Settings",
+    url: "/settings",
+    icon: Settings, // Make sure to import SettingsIcon from 'lucide-react'
+    requireAuth: true,
+  },
 ]
 
 const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL || "admin@devpulse.dev"
