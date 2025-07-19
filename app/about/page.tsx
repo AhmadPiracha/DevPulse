@@ -100,7 +100,7 @@ export default function AboutPage() {
           </div>
 
           {/* Tech Stack */}
-          <Card className="border-border/40">
+          {/* <Card className="border-border/40">
             <CardHeader>
               <CardTitle>Built With</CardTitle>
             </CardHeader>
@@ -115,7 +115,7 @@ export default function AboutPage() {
                 <Badge variant="secondary">Supabase</Badge>
               </div>
             </CardContent>
-          </Card>
+          </Card> */}
 
           {/* Contact */}
           <Card className="border-border/40">

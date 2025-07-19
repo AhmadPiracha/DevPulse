@@ -137,73 +137,6 @@ export async function fetchDevTo(): Promise<NewsItem[]> {
   }
 }
 
-// New: Simulated Crypto/Web3 News Source
-export async function fetchCryptoNews(): Promise<NewsItem[]> {
-  console.log("₿ Fetching Crypto/Web3 News (simulated)...")
-  // In a real application, you would fetch from a crypto news API here.
-  // For demonstration, we'll return some hardcoded articles.
-  const articles: NewsItem[] = [
-    {
-      title: "Ethereum's Dencun Upgrade: What Developers Need to Know",
-      url: "https://example.com/ethereum-dencun-upgrade",
-      source: "Crypto News",
-      author: "Blockchain Dev",
-      score: 120,
-      tags: ["Web3", "Ethereum", "Blockchain", "DeFi"],
-      summary:
-        "The Dencun upgrade introduces proto-danksharding, significantly reducing transaction costs for Layer 2s. Developers should prepare for changes in data availability and gas pricing.",
-      sourceIcon: "₿",
-    },
-    {
-      title: "The Rise of Decentralized Social Media Platforms",
-      url: "https://example.com/decentralized-social-media",
-      source: "Crypto News",
-      author: "Web3 Enthusiast",
-      score: 85,
-      tags: ["Web3", "SocialFi", "Blockchain"],
-      summary:
-        "New decentralized social media platforms are emerging, promising user ownership of data and content, powered by blockchain technology and tokenomics.",
-      sourceIcon: "₿",
-    },
-    {
-      title: "Understanding Zero-Knowledge Proofs in Blockchain",
-      url: "https://example.com/zk-proofs",
-      source: "Crypto News",
-      author: "Cryptography Expert",
-      score: 95,
-      tags: ["Blockchain", "Cryptography", "Web3", "Security"],
-      summary:
-        "Zero-knowledge proofs are a cryptographic method allowing one party to prove to another that a statement is true, without revealing any information beyond the validity of the statement itself.",
-      sourceIcon: "₿",
-    },
-    {
-      title: "NFTs Beyond Art: Utility and Real-World Applications",
-      url: "https://example.com/nfts-utility",
-      source: "Crypto News",
-      author: "NFT Analyst",
-      score: 70,
-      tags: ["NFTs", "Web3", "Blockchain"],
-      summary:
-        "Beyond digital art, NFTs are finding utility in ticketing, supply chain management, digital identity, and gaming, unlocking new real-world applications.",
-      sourceIcon: "₿",
-    },
-  ]
-  console.log(`✅ Got ${articles.length} simulated articles from Crypto News`)
-  return articles.map((article) => ({
-    ...article,
-    tags: categorizeArticle(article.title).concat(
-      article.tags.filter((tag) => !categorizeArticle(article.title).includes(tag)),
-    ),
-    summary: generateBasicSummary(
-      article.title,
-      article.score || 0,
-      article.author || "Unknown",
-      article.source,
-      article.summary,
-    ),
-  }))
-}
-
 // AI Summary generation using OpenAI (if available) or fallback to basic summary
 export async function generateSummary(title: string, url: string): Promise<string> {
   // If OpenAI API key is available, use AI summary
@@ -258,11 +191,6 @@ function generateBasicSummary(
       `Developer article by ${author} with ${score} reactions. ${description || extractKeywords(title)}.`,
       `Community favorite: ${extractKeywords(title)}. ${score} developers found this helpful.`,
       `Popular dev article with ${score} reactions. ${description || "Worth reading for developers."}.`,
-    ],
-    "Crypto News": [
-      `Latest in crypto: ${extractKeywords(title)}. This article by ${author} has ${score} mentions.`,
-      `Web3 insights: ${extractKeywords(title)}. A must-read for blockchain enthusiasts.`,
-      `Trending in decentralized tech: ${extractKeywords(title)}. Learn about the future of the internet.`,
     ],
   }
 

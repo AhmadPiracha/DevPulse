@@ -314,11 +314,11 @@ export default function DebugPage() {
 
           <div>
             <h4 className="font-semibold text-blue-600">Example .env.local file:</h4>
-            <pre className="bg-muted p-3 rounded text-sm mt-2">
+            {/* <pre className="bg-muted p-3 rounded text-sm mt-2">
               {`MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/devpulse
 JWT_SECRET=your_super_secret_key_here
 OPENAI_API_KEY=sk-your_openai_key_here`}
-            </pre>
+            </pre> */}
           </div>
 
           <div>

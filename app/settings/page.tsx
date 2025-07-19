@@ -10,21 +10,8 @@ import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
 import { Loader2, SettingsIcon } from "lucide-react"
 
-const availableSources = ["Hacker News", "GitHub", "Dev.to", "Crypto News"] // Added "Crypto News"
-const commonTags = [
-  "JavaScript",
-  "AI",
-  "Python",
-  "Web Development",
-  "DevOps",
-  "Mobile",
-  "Security",
-  "Database",
-  "Blockchain",
-  "Web3",
-  "DeFi",
-  "NFTs",
-] // Expanded tags
+const availableSources = ["Hacker News", "GitHub", "Dev.to"]
+const commonTags = ["JavaScript", "AI", "Python", "Web Development", "DevOps", "Mobile", "Security", "Database"]
 
 export default function SettingsPage() {
   const { user, loading: authLoading } = useAuth()
@@ -137,6 +124,13 @@ export default function SettingsPage() {
 
   return (
     <div className="p-4 sm:p-6 max-w-4xl mx-auto space-y-6">
+      <div className="flex items-center gap-4">
+        <SettingsIcon className="h-8 w-8 text-primary" />
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold">User Settings</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">Manage your DevPulse preferences</p>
+        </div>
+      </div>
 
       <Card>
         <CardHeader>

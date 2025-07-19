@@ -115,24 +115,16 @@ export async function POST(request: Request) {
     console.log("🚀 Starting article update process...")
 
     // Import functions
-    const { fetchHackerNews, fetchGitHubTrending, fetchDevTo, fetchCryptoNews } = await import("@/lib/news-sources") // Import fetchCryptoNews
+    const { fetchHackerNews, fetchGitHubTrending, fetchDevTo, fetchCryptoNews } = await import("@/lib/news-sources")
     const db = await getDatabase()
     const articlesCollection = db.collection<Article>("articles")
 
     // Fetch from all sources in parallel
-    const [hackerNews, github, devTo, cryptoNews] = await Promise.all([
-      // Add cryptoNews
-      fetchHackerNews(),
-      fetchGitHubTrending(),
-      fetchDevTo(),
-      fetchCryptoNews(), // Call the new function
-    ])
+    const [hackerNews, github, devTo] = await Promise.all([fetchHackerNews(), fetchGitHubTrending(), fetchDevTo()])
 
-    console.log(
-      `📊 Fetched: ${hackerNews.length} HN, ${github.length} GitHub, ${devTo.length} Dev.to, ${cryptoNews.length} Crypto News`,
-    ) // Update log
+    console.log(`📊 Fetched: ${hackerNews.length} HN, ${github.length} GitHub, ${devTo.length} Dev.to, 0 Crypto News`) // Update log
 
-    const allArticles = [...hackerNews, ...github, ...devTo, ...cryptoNews] // Combine all articles
+    const allArticles = [...hackerNews, ...github, ...devTo] // Combine all articles
 
     if (allArticles.length === 0) {
       return NextResponse.json({
@@ -208,7 +200,6 @@ export async function POST(request: Request) {
         hackerNews: hackerNews.length,
         github: github.length,
         devTo: devTo.length,
-        cryptoNews: cryptoNews.length, // Add cryptoNews count
       },
     })
   } catch (error: any) {

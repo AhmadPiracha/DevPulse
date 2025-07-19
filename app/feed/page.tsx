@@ -11,7 +11,7 @@ import { useAuth } from "@/components/auth-provider"
 import { Input } from "@/components/ui/input"
 import { ArticleList } from "@/components/article-list"
 
-const filters = ["All", "Hacker News", "GitHub", "Dev.to", "Crypto News"] // Added "Crypto News"
+const filters = ["All", "Hacker News", "GitHub", "Dev.to"] // Re-added "Crypto News"
 
 export default function FeedPage() {
   const [articles, setArticles] = useState<Article[]>([])
