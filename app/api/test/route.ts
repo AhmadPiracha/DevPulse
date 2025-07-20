@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { testConnection } from "@/lib/mongodb"
 
 export async function GET() {
   try {
@@ -6,8 +7,12 @@ export async function GET() {
     console.log("Testing API endpoint...")
 
     // Test MongoDB connection
-    const { testConnection } = await import("@/lib/mongodb")
-    const mongoConnected = await testConnection()
+    const isConnected = await testConnection()
+    if (isConnected) {
+      return NextResponse.json({ message: "MongoDB connected successfully!" })
+    } else {
+      return NextResponse.json({ message: "Failed to connect to MongoDB." }, { status: 500 })
+    }
 
     // Test environment variables
     const hasMongoUri = !!process.env.MONGODB_URI
@@ -19,7 +24,7 @@ export async function GET() {
       message: "API is working!",
       timestamp: new Date().toISOString(),
       mongodb: {
-        connected: mongoConnected,
+        connected: isConnected,
         hasUri: hasMongoUri,
       },
       environment: {

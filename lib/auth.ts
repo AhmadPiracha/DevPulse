@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs"
 import jwt from "jsonwebtoken"
 import { getDatabase, type User } from "./mongodb"
+import { ObjectId } from "mongodb"
 
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key"
 
@@ -60,4 +61,22 @@ export async function authenticateUser(email: string, password: string): Promise
   if (!isValid) return null
 
   return user
+}
+
+export async function updateUserPassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
+  const db = await getDatabase()
+  const users = db.collection<User>("users")
+
+  const user = await users.findOne({ _id: new ObjectId(userId) })
+  if (!user) {
+    throw new Error("User not found")
+  }
+
+  const isValid = await verifyPassword(currentPassword, user.password)
+  if (!isValid) {
+    throw new Error("Invalid current password")
+  }
+
+  const hashedPassword = await hashPassword(newPassword)
+  await users.updateOne({ _id: new ObjectId(userId) }, { $set: { password: hashedPassword } })
 }

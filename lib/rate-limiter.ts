@@ -7,39 +7,33 @@ interface RateLimitEntry {
   lastReset: number
 }
 
-const limits = new Map<string, RateLimitEntry>() // key: userId or IP, value: { count, lastReset }
+const requests = new Map<string, { count: number; lastReset: number }>()
 export const WINDOW_MS = 60 * 1000 // 1 minute
-export const MAX_REQUESTS = 10 // Max 10 requests per minute per user/IP
+export const MAX_REQUESTS = 100 // Max 100 requests per minute per IP
 
-export function checkRateLimit(identifier: string): { allowed: boolean; remaining: number; resetAfter: number } {
+export function checkRateLimit(ip: string): boolean {
   const now = Date.now()
-  let entry = limits.get(identifier)
+  const client = requests.get(ip) || { count: 0, lastReset: now }
 
-  if (!entry || now - entry.lastReset > WINDOW_MS) {
-    // Reset or initialize if window expired
-    entry = { count: 0, lastReset: now }
-    limits.set(identifier, entry)
-  }
-
-  if (entry.count < MAX_REQUESTS) {
-    entry.count++
-    const remaining = MAX_REQUESTS - entry.count
-    const resetAfter = WINDOW_MS - (now - entry.lastReset)
-    return { allowed: true, remaining, resetAfter }
+  if (now - client.lastReset > WINDOW_MS) {
+    client.count = 1
+    client.lastReset = now
   } else {
-    const remaining = 0
-    const resetAfter = WINDOW_MS - (now - entry.lastReset)
-    return { allowed: false, remaining, resetAfter }
+    client.count++
   }
+
+  requests.set(ip, client)
+
+  return client.count > MAX_REQUESTS
 }
 
 // Optional: Clean up old entries periodically
 setInterval(() => {
   const now = Date.now()
-  for (const [key, entry] of limits.entries()) {
+  for (const [key, entry] of requests.entries()) {
     if (now - entry.lastReset > WINDOW_MS * 2) {
       // Remove entries older than 2 windows
-      limits.delete(key)
+      requests.delete(key)
     }
   }
 }, WINDOW_MS)

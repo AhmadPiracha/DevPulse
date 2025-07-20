@@ -1,108 +1,100 @@
 import { NextResponse } from "next/server"
-import { getDatabase, type Article, type NewsletterSubscriber } from "@/lib/mongodb"
+import { getDatabase, type NewsletterSubscriber, type Article } from "@/lib/mongodb"
+import { Resend } from "resend"
 
-export async function POST() {
+// Allow streaming responses up to 30 seconds
+export const maxDuration = 30
+
+export async function POST(request: Request) {
   try {
-    // Check if Resend is configured
-    if (!process.env.RESEND_API_KEY) {
-      return NextResponse.json(
-        {
-          error: "Newsletter feature requires Resend API key",
-          message: "Add RESEND_API_KEY to your environment variables to enable newsletters",
-        },
-        { status: 400 },
-      )
+    // Basic authentication/authorization check (e.g., API key, internal call)
+    // For a real app, you'd want more robust security here.
+    const authHeader = request.headers.get("Authorization")
+    if (authHeader !== `Bearer ${process.env.INTERNAL_API_KEY}`) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
-
-    const { Resend } = await import("resend")
-    const resend = new Resend(process.env.RESEND_API_KEY)
 
     const db = await getDatabase()
+    const subscribersCollection = db.collection<NewsletterSubscriber>("newsletter_subscribers")
+    const articlesCollection = db.collection<Article>("articles")
 
-    // Get top articles from last 24 hours
-    const yesterday = new Date()
-    yesterday.setDate(yesterday.getDate() - 1)
+    // Fetch active subscribers
+    const activeSubscribers = await subscribersCollection.find({ active: true }).toArray()
 
-    const articles = await db
-      .collection<Article>("articles")
-      .find({ createdAt: { $gte: yesterday } })
-      .sort({ score: -1 })
-      .limit(10)
-      .toArray()
-
-    // Get all active subscribers
-    const subscribers = await db
-      .collection<NewsletterSubscriber>("newsletter_subscribers")
-      .find({ active: true })
-      .toArray()
-
-    if (subscribers.length === 0) {
-      return NextResponse.json({ message: "No active subscribers", subscriberCount: 0, articleCount: articles.length })
+    if (activeSubscribers.length === 0) {
+      return NextResponse.json({ message: "No active subscribers to send to." })
     }
 
-    // Generate newsletter HTML
-    const newsletterHTML = generateNewsletterHTML(articles)
+    // Fetch recent articles (e.g., last 24 hours, or top 5)
+    const recentArticles = await articlesCollection
+      .find({ createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } }) // Articles from last 24 hours
+      .sort({ score: -1, createdAt: -1 }) // Sort by score then recency
+      .limit(5)
+      .toArray()
 
-    // Send to all subscribers (in batches to avoid rate limits)
-    const batchSize = 50
-    for (let i = 0; i < subscribers.length; i += batchSize) {
-      const batch = subscribers.slice(i, i + batchSize)
+    if (recentArticles.length === 0) {
+      return NextResponse.json({ message: "No new articles to send." })
+    }
 
-      const emailPromises = batch.map((subscriber) =>
-        resend.emails.send({
-          from: "DevPulse Daily <ahmadpiracha11@gmail.com>",
+    if (!process.env.RESEND_API_KEY) {
+      console.warn("RESEND_API_KEY not set. Skipping newsletter send.")
+      return NextResponse.json({ error: "RESEND_API_KEY not configured." }, { status: 500 })
+    }
+
+    const resend = new Resend(process.env.RESEND_API_KEY)
+
+    let successCount = 0
+    let failCount = 0
+
+    for (const subscriber of activeSubscribers) {
+      const emailContent = `
+        <div style="font-family: system-ui, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h1 style="color: #3b82f6;">Your Daily DevPulse Digest</h1>
+          <p>Here are the top articles from the last 24 hours:</p>
+          <ul style="list-style: none; padding: 0;">
+            ${recentArticles
+              .map(
+                (article) => `
+              <li style="margin-bottom: 20px; border-bottom: 1px solid #e5e7eb; padding-bottom: 15px;">
+                <h2 style="font-size: 18px; margin-bottom: 5px;"><a href="${article.url}" style="color: #1d4ed8; text-decoration: none;">${article.title}</a></h2>
+                <p style="font-size: 14px; color: #6b7280;">${article.summary}</p>
+                <p style="font-size: 12px; color: #9ca3af;">Source: ${article.source} | Tags: ${article.tags.join(", ")}</p>
+              </li>
+            `,
+              )
+              .join("")}
+          </ul>
+          <p>Read more on <a href="${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}" style="color: #3b82f6; text-decoration: none;">DevPulse</a>.</p>
+          <hr style="margin: 20px 0; border: 1px solid #e5e7eb;">
+          <p style="color: #6b7280; font-size: 12px;">
+            You received this email because you subscribed to DevPulse.
+            To unsubscribe, visit your profile settings on DevPulse.
+          </p>
+        </div>
+      `
+
+      try {
+        await resend.emails.send({
+          from: "DevPulse Digest <digest@devpulse.dev>", // Use a dedicated domain for newsletters
           to: subscriber.email,
-          subject: `DevPulse Daily - ${new Date().toLocaleDateString("en-US", {
-            weekday: "long",
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-          })}`,
-          html: newsletterHTML,
-        }),
-      )
-
-      await Promise.all(emailPromises)
-
-      // Small delay between batches
-      if (i + batchSize < subscribers.length) {
-        await new Promise((resolve) => setTimeout(resolve, 1000))
+          subject: "Your Daily DevPulse Digest",
+          html: emailContent,
+        })
+        successCount++
+        console.log(`Newsletter sent to ${subscriber.email}`)
+      } catch (error) {
+        failCount++
+        console.error(`Failed to send newsletter to ${subscriber.email}:`, error)
       }
     }
 
     return NextResponse.json({
-      message: "Newsletter sent successfully",
-      subscriberCount: subscribers.length,
-      articleCount: articles.length,
+      message: `Newsletter send complete. Sent to ${successCount} subscribers, ${failCount} failed.`,
+      successCount,
+      failCount,
     })
   } catch (error) {
-    console.error("Newsletter send error:", error)
+    console.error("Error sending newsletter:", error)
     return NextResponse.json({ error: "Failed to send newsletter" }, { status: 500 })
   }
-}
-
-function generateNewsletterHTML(articles: Article[]) {
-  const articleHTML = articles
-    .map(
-      (article) => `
-    <div style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
-      <h2 style="margin: 0 0 8px;">${article.title}</h2>
-      <p style="margin: 0;">${article.summary}</p>
-      <a href="${article.url}" style="color: #16a34a; text-decoration: none;">Read More</a>
-    </div>
-  `,
-    )
-    .join("")
-
-  return `
-    <html>
-      <head>
-        <title>DevPulse Daily Newsletter</title>
-      </head>
-      <body>
-        <h1 style="text-align: center; margin-bottom: 24px;">DevPulse Daily Newsletter</h1>
-        ${articleHTML}
-      </body>
-    </html>
-  `
 }

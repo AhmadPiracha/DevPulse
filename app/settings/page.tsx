@@ -1,38 +1,51 @@
 "use client"
 
+import type React from "react"
+
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
-import { useAuth } from "@/components/auth-provider"
-import { useRouter } from "next/navigation"
+import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, SettingsIcon } from "lucide-react"
+import { useAuth } from "@/components/auth-provider"
+import { Loader2, Settings, KeyRound, Mail } from "lucide-react"
+import { newsSources } from "@/lib/news-sources"
 
-const availableSources = ["Hacker News", "GitHub", "Dev.to"]
-const commonTags = ["JavaScript", "AI", "Python", "Web Development", "DevOps", "Mobile", "Security", "Database"]
+interface UserPreferences {
+  sources: string[]
+  tags: string[]
+}
 
 export default function SettingsPage() {
-  const { user, loading: authLoading } = useAuth()
-  const router = useRouter()
+  const { user, loading: authLoading, signOut } = useAuth()
   const { toast } = useToast()
 
-  const [preferredSources, setPreferredSources] = useState<string[]>([])
-  const [preferredTags, setPreferredTags] = useState<string[]>([])
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
+  const [preferences, setPreferences] = useState<UserPreferences>({ sources: [], tags: [] })
+  const [loadingPreferences, setLoadingPreferences] = useState(true)
+  const [savingPreferences, setSavingPreferences] = useState(false)
+
+  const [currentPassword, setCurrentPassword] = useState("")
+  const [newPassword, setNewPassword] = useState("")
+  const [confirmNewPassword, setConfirmNewPassword] = useState("")
+  const [updatingPassword, setUpdatingPassword] = useState(false)
 
   useEffect(() => {
-    if (!authLoading && !user) {
-      router.push("/auth") // Redirect to login if not authenticated
-    } else if (user) {
+    if (user) {
       fetchPreferences()
+    } else if (!authLoading) {
+      // Redirect or show message if not logged in
+      toast({
+        title: "Authentication Required",
+        description: "Please sign in to manage your settings.",
+        variant: "destructive",
+      })
     }
-  }, [user, authLoading, router])
+  }, [user, authLoading, toast])
 
   const fetchPreferences = async () => {
-    setLoading(true)
+    setLoadingPreferences(true)
     try {
       const response = await fetch("/api/user/preferences", {
         credentials: "include",
@@ -42,9 +55,9 @@ export default function SettingsPage() {
       })
       if (response.ok) {
         const data = await response.json()
-        setPreferredSources(data.preferences?.sources || [])
-        setPreferredTags(data.preferences?.tags || [])
+        setPreferences(data.preferences || { sources: [], tags: [] })
       } else {
+        console.error("Failed to fetch preferences:", await response.json())
         toast({
           title: "Error",
           description: "Failed to load preferences.",
@@ -59,12 +72,37 @@ export default function SettingsPage() {
         variant: "destructive",
       })
     } finally {
-      setLoading(false)
+      setLoadingPreferences(false)
     }
   }
 
-  const handleSavePreferences = async () => {
-    setSaving(true)
+  const handleSourceChange = (sourceName: string, checked: boolean) => {
+    setPreferences((prev) => {
+      const newSources = checked ? [...prev.sources, sourceName] : prev.sources.filter((s) => s !== sourceName)
+
+      // Special handling for "All" source
+      if (sourceName === "All") {
+        return { ...prev, sources: checked ? ["All"] : [] }
+      } else if (newSources.includes("All") && checked) {
+        // If a specific source is checked, and "All" was previously selected, remove "All"
+        return { ...prev, sources: newSources.filter((s) => s !== "All") }
+      } else if (newSources.length === 0 && !checked) {
+        // If all specific sources are unchecked, default to "All"
+        return { ...prev, sources: ["All"] }
+      }
+      return { ...prev, sources: newSources }
+    })
+  }
+
+  const handleTagChange = (tag: string, checked: boolean) => {
+    setPreferences((prev) => {
+      const newTags = checked ? [...prev.tags, tag] : prev.tags.filter((t) => t !== tag)
+      return { ...prev, tags: newTags }
+    })
+  }
+
+  const savePreferences = async () => {
+    setSavingPreferences(true)
     try {
       const response = await fetch("/api/user/preferences", {
         method: "POST",
@@ -73,13 +111,12 @@ export default function SettingsPage() {
           Cookie: document.cookie,
         },
         credentials: "include",
-        body: JSON.stringify({ sources: preferredSources, tags: preferredTags }),
+        body: JSON.stringify(preferences),
       })
 
       if (response.ok) {
         toast({
-          title: "Preferences Saved",
-          description: "Your feed preferences have been updated.",
+          description: "Preferences saved successfully!",
         })
       } else {
         const errorData = await response.json()
@@ -97,89 +134,294 @@ export default function SettingsPage() {
         variant: "destructive",
       })
     } finally {
-      setSaving(false)
+      setSavingPreferences(false)
     }
   }
 
-  const handleSourceChange = (source: string, checked: boolean) => {
-    setPreferredSources((prev) => (checked ? [...prev, source] : prev.filter((s) => s !== source)))
+  const handlePasswordUpdate = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setUpdatingPassword(true)
+
+    if (newPassword !== confirmNewPassword) {
+      toast({
+        title: "Error",
+        description: "New passwords do not match.",
+        variant: "destructive",
+      })
+      setUpdatingPassword(false)
+      return
+    }
+
+    if (newPassword.length < 6) {
+      toast({
+        title: "Error",
+        description: "New password must be at least 6 characters.",
+        variant: "destructive",
+      })
+      setUpdatingPassword(false)
+      return
+    }
+
+    try {
+      const response = await fetch("/api/user/update-password", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Cookie: document.cookie,
+        },
+        credentials: "include",
+        body: JSON.stringify({ currentPassword, newPassword }),
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        toast({
+          description: "Password updated successfully!",
+        })
+        setCurrentPassword("")
+        setNewPassword("")
+        setConfirmNewPassword("")
+      } else {
+        toast({
+          title: "Error",
+          description: data.error || "Failed to update password.",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Error updating password:", error)
+      toast({
+        title: "Error",
+        description: "Failed to update password.",
+        variant: "destructive",
+      })
+    } finally {
+      setUpdatingPassword(false)
+    }
   }
 
-  const handleTagChange = (tag: string, checked: boolean) => {
-    setPreferredTags((prev) => (checked ? [...prev, tag] : prev.filter((t) => t !== tag)))
+  const handleSignOut = async () => {
+    await signOut()
+    toast({
+      title: "Signed Out",
+      description: "You have been successfully signed out.",
+    })
   }
 
-  if (authLoading || loading) {
+  if (authLoading || !user) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <p className="ml-2 text-muted-foreground">Loading preferences...</p>
+        <p className="ml-2 text-muted-foreground">Loading settings...</p>
       </div>
     )
   }
 
-  if (!user) {
-    return null // Should be redirected by useEffect
-  }
+  const allTags = [
+    "Programming",
+    "Web Development",
+    "AI",
+    "Machine Learning",
+    "Cloud",
+    "DevOps",
+    "Cybersecurity",
+    "Data Science",
+    "Mobile Development",
+    "Frontend",
+    "Backend",
+    "Databases",
+    "Open Source",
+    "Productivity",
+    "Career",
+  ]
 
   return (
     <div className="p-4 sm:p-6 max-w-4xl mx-auto space-y-6">
       <div className="flex items-center gap-4">
-        <SettingsIcon className="h-8 w-8 text-primary" />
+        <Settings className="h-8 w-8 text-primary" />
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold">User Settings</h1>
-          <p className="text-sm sm:text-base text-muted-foreground">Manage your DevPulse preferences</p>
+          <h1 className="text-xl sm:text-2xl font-bold">Settings</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">Manage your account and preferences.</p>
         </div>
       </div>
 
-      <Card>
+      {/* Email Verification Status */}
+      <Card className="border-border/40">
         <CardHeader>
-          <CardTitle>Preferred News Sources</CardTitle>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Mail className="h-5 w-5" /> Email Verification
+          </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-sm text-muted-foreground">Select the sources you want to see in your feed.</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {availableSources.map((source) => (
-              <div key={source} className="flex items-center space-x-2">
-                <Checkbox
-                  id={`source-${source}`}
-                  checked={preferredSources.includes(source)}
-                  onCheckedChange={(checked) => handleSourceChange(source, checked as boolean)}
-                />
-                <Label htmlFor={`source-${source}`}>{source}</Label>
-              </div>
-            ))}
-          </div>
+        <CardContent className="space-y-4">
+          {user.isVerified ? (
+            <p className="text-sm text-green-600">Your email address ({user.email}) is verified.</p>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-sm text-red-600">Your email address ({user.email}) is not verified.</p>
+              <Button
+                onClick={() => {
+                  // Assuming email is available from user object
+                  fetch("/api/auth/resend-verification", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ email: user.email }),
+                  })
+                    .then((res) => res.json())
+                    .then((data) => {
+                      if (data.error) {
+                        toast({ title: "Error", description: data.error, variant: "destructive" })
+                      } else {
+                        toast({ description: data.message || "Verification email sent!" })
+                      }
+                    })
+                    .catch((err) => {
+                      console.error("Resend verification error:", err)
+                      toast({
+                        title: "Error",
+                        description: "Failed to resend verification email.",
+                        variant: "destructive",
+                      })
+                    })
+                }}
+                disabled={updatingPassword}
+              >
+                Resend Verification Email
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      <Card>
+      {/* Preferences Card */}
+      <Card className="border-border/40">
         <CardHeader>
-          <CardTitle>Preferred Tags/Topics</CardTitle>
+          <CardTitle className="text-lg">Content Preferences</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-sm text-muted-foreground">
-            Select topics that interest you. Articles with these tags will be prioritized.
-          </p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-            {commonTags.map((tag) => (
-              <div key={tag} className="flex items-center space-x-2">
-                <Checkbox
-                  id={`tag-${tag}`}
-                  checked={preferredTags.includes(tag)}
-                  onCheckedChange={(checked) => handleTagChange(tag, checked as boolean)}
-                />
-                <Label htmlFor={`tag-${tag}`}>{tag}</Label>
+        <CardContent className="space-y-6">
+          {loadingPreferences ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              <p className="ml-2 text-muted-foreground">Loading preferences...</p>
+            </div>
+          ) : (
+            <>
+              <div className="space-y-4">
+                <h3 className="font-semibold">Preferred Sources:</h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                  {/* Add "All" option */}
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="source-all"
+                      checked={preferences.sources.includes("All")}
+                      onCheckedChange={(checked) => handleSourceChange("All", !!checked)}
+                    />
+                    <Label htmlFor="source-all">All Sources</Label>
+                  </div>
+                  {newsSources.map((source) => (
+                    <div key={source.name} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`source-${source.name}`}
+                        checked={preferences.sources.includes(source.name) && !preferences.sources.includes("All")}
+                        onCheckedChange={(checked) => handleSourceChange(source.name, !!checked)}
+                        disabled={preferences.sources.includes("All")}
+                      />
+                      <Label htmlFor={`source-${source.name}`}>
+                        {source.icon} {source.name}
+                      </Label>
+                    </div>
+                  ))}
+                </div>
               </div>
-            ))}
-          </div>
+
+              <div className="space-y-4">
+                <h3 className="font-semibold">Preferred Tags:</h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                  {allTags.map((tag) => (
+                    <div key={tag} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`tag-${tag}`}
+                        checked={preferences.tags.includes(tag)}
+                        onCheckedChange={(checked) => handleTagChange(tag, !!checked)}
+                      />
+                      <Label htmlFor={`tag-${tag}`}>#{tag}</Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <Button onClick={savePreferences} disabled={savingPreferences} className="w-full">
+                {savingPreferences && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Save Preferences
+              </Button>
+            </>
+          )}
         </CardContent>
       </Card>
 
-      <Button onClick={handleSavePreferences} disabled={saving} className="w-full">
-        {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-        Save Preferences
-      </Button>
+      {/* Password Update Card */}
+      <Card className="border-border/40">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <KeyRound className="h-5 w-5" /> Update Password
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handlePasswordUpdate} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="current-password">Current Password</Label>
+              <Input
+                id="current-password"
+                type="password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                required
+                className="h-11"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new-password">New Password</Label>
+              <Input
+                id="new-password"
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                required
+                minLength={6}
+                className="h-11"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirm-new-password">Confirm New Password</Label>
+              <Input
+                id="confirm-new-password"
+                type="password"
+                value={confirmNewPassword}
+                onChange={(e) => setConfirmNewPassword(e.target.value)}
+                required
+                minLength={6}
+                className="h-11"
+              />
+            </div>
+            <Button type="submit" disabled={updatingPassword} className="w-full">
+              {updatingPassword && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Update Password
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      {/* Logout Card */}
+      <Card className="border-border/40">
+        <CardHeader>
+          <CardTitle className="text-lg">Account Actions</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Button onClick={handleSignOut} variant="destructive" className="w-full">
+            Sign Out
+          </Button>
+        </CardContent>
+      </Card>
     </div>
   )
 }

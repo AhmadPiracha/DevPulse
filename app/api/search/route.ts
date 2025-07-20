@@ -7,7 +7,9 @@ import { verifyToken } from "@/lib/auth"
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
-  const userQuery = searchParams.get("query")
+  const userQuery = searchParams.get("q") || ""
+  const limit = Number.parseInt(searchParams.get("limit") || "10")
+  const offset = Number.parseInt(searchParams.get("offset") || "0")
 
   // Get user ID from token or use IP address for rate limiting
   const token = request.headers.get("cookie")?.split("auth-token=")[1]?.split(";")[0]
@@ -43,7 +45,7 @@ export async function GET(request: Request) {
   }
 
   if (!userQuery) {
-    return NextResponse.json({ error: "Search query is required" }, { status: 400 })
+    return NextResponse.json({ articles: [], total: 0, message: "No search query provided." }, { status: 400 })
   }
 
   try {
@@ -95,15 +97,22 @@ export async function GET(request: Request) {
         { summary: { $in: regexKeywords } },
         { tags: { $in: searchKeywords } }, // Direct match for tags
         { source: { $in: regexKeywords } },
-        { author: { $in: regexKeywords } },
+        { author: { $in: searchKeywords } },
       ],
     }
 
-    const searchResults = await articlesCollection.find(query).sort({ score: -1, createdAt: -1 }).limit(50).toArray()
+    const searchResults = await articlesCollection
+      .find(query, { score: { $meta: "textScore" } })
+      .sort({ score: { $meta: "textScore" } }) // Sort by relevance
+      .skip(offset)
+      .limit(limit)
+      .toArray()
+
+    const totalResults = await articlesCollection.countDocuments(query)
 
     console.log(`✅ Found ${searchResults.length} articles for search query: "${userQuery}"`)
 
-    return NextResponse.json({ articles: searchResults })
+    return NextResponse.json({ articles: searchResults, total: totalResults })
   } catch (error: any) {
     console.error("❌ Error during AI-powered search:", error)
     return NextResponse.json(

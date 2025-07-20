@@ -2,13 +2,34 @@
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { ArrowRight, Zap, Users, Mail } from "lucide-react"
+import { ArrowRight, Zap, Users, Mail, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { NewsletterModal } from "@/components/newsletter-modal"
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useAuth } from "@/components/auth-provider"
+import { useRouter } from "next/navigation"
 
 export default function HomePage() {
   const [showNewsletter, setShowNewsletter] = useState(false)
+
+  const { user, loading: authLoading } = useAuth()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (!authLoading && user) {
+      router.replace("/dashboard") // Redirect to dashboard if user is logged in
+    }
+  }, [user, authLoading, router])
+
+  // Add a loading state return for when the redirect is happening
+  if (authLoading || user) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="ml-2 text-muted-foreground">Redirecting to dashboard...</p>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col min-h-screen">

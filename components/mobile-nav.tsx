@@ -40,6 +40,12 @@ const menuItems = [
     icon: Settings,
     requireAuth: true, // Only show if user is logged in
   },
+  {
+    title: "Profile",
+    url: "/profile",
+    icon: User, // Make sure User is imported from 'lucide-react'
+    requireAuth: true,
+  },
 ]
 
 export function MobileNav() {

@@ -1,67 +1,48 @@
 import type React from "react"
 import type { Metadata } from "next"
-import { Inter, JetBrains_Mono } from "next/font/google"
+import { Inter } from "next/font/google"
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
-import { SidebarProvider } from "@/components/ui/sidebar"
-import { AppSidebar } from "@/components/app-sidebar"
 import { Toaster } from "@/components/ui/toaster"
 import { AuthProvider } from "@/components/auth-provider"
+import { AppSidebar } from "@/components/app-sidebar"
+import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar"
 import { MobileNav } from "@/components/mobile-nav"
+import { Separator } from "@/components/ui/separator"
+import { cookies } from "next/headers"
 
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter",
-})
-
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ["latin"],
-  variable: "--font-jetbrains-mono",
-})
+const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "DevPulse - Stay in the loop. Automatically.",
-  description: "Developer-focused tech news aggregator with AI summaries and daily digest",
-  keywords: ["tech news", "developer", "programming", "hacker news", "github", "dev.to"],
-  authors: [{ name: "DevPulse Team" }],
-  openGraph: {
-    title: "DevPulse - Developer Tech News",
-    description: "Stay updated with the latest tech news, curated for developers",
-    type: "website",
-  },
+  title: "DevPulse",
+  description: "Your personalized hub for staying updated with the latest in tech news and development.",
 }
 
-export function generateViewport() {
-  return {
-    width: "device-width",
-    initialScale: 1,
-  }
-}
-
-export default function RootLayout({
+export default async function RootLayout({
   children,
-}: {
+}: Readonly<{
   children: React.ReactNode
-}) {
+}>) {
+  const cookieStore = cookies()
+  const defaultOpen = cookieStore.get("sidebar:state")?.value === "true"
+
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${inter.variable} ${jetbrainsMono.variable} font-sans antialiased`}>
-        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
+      <body className={inter.className}>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           <AuthProvider>
-            <SidebarProvider defaultOpen={true}>
-              <div className="flex min-h-screen w-full">
-                {/* Desktop Sidebar - Hidden on mobile */}
-                <AppSidebar />
-
-                {/* Main Content Area */}
-                <div className="flex-1 flex flex-col min-w-0">
-                  {/* Mobile Navigation - Only shown on mobile */}
+            <SidebarProvider defaultOpen={defaultOpen}>
+              <AppSidebar />
+              <SidebarInset>
+                <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
                   <MobileNav />
-
-                  {/* Page Content */}
-                  <main className="flex-1 overflow-hidden">{children}</main>
-                </div>
-              </div>
+                  <SidebarTrigger className="-ml-1 hidden md:flex" />
+                  <Separator orientation="vertical" className="mr-2 h-4 hidden md:block" />
+                  {/* You can add breadcrumbs or other header content here */}
+                  <h1 className="text-lg font-semibold">DevPulse</h1>
+                </header>
+                {children}
+              </SidebarInset>
             </SidebarProvider>
           </AuthProvider>
           <Toaster />

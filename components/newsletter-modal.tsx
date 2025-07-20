@@ -4,96 +4,102 @@ import type React from "react"
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Mail, CheckCircle } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { Loader2, MailCheck } from "lucide-react"
 
 interface NewsletterModalProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
+  isOpen: boolean
+  onClose: () => void
 }
 
-export function NewsletterModal({ open, onOpenChange }: NewsletterModalProps) {
+export function NewsletterModal({ isOpen, onClose }: NewsletterModalProps) {
   const [email, setEmail] = useState("")
-  const [isSubmitted, setIsSubmitted] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [subscribed, setSubscribed] = useState(false)
   const { toast } = useToast()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!email) return
+    setLoading(true)
+    setSubscribed(false)
 
-    setIsLoading(true)
+    try {
+      const response = await fetch("/api/newsletter/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      })
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+      const data = await response.json()
 
-    setIsSubmitted(true)
-    setIsLoading(false)
+      if (response.ok) {
+        setSubscribed(true)
+        toast({
+          title: "Subscribed!",
+          description: data.message,
+        })
+      } else {
+        toast({
+          title: "Error",
+          description: data.error || "Failed to subscribe to newsletter.",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Newsletter subscription error:", error)
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred.",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
 
-    toast({
-      description: "Successfully subscribed to the newsletter!",
-    })
-
-    // Reset after 2 seconds
-    setTimeout(() => {
-      setIsSubmitted(false)
-      setEmail("")
-      onOpenChange(false)
-    }, 2000)
+  const handleCloseModal = () => {
+    setEmail("")
+    setSubscribed(false)
+    onClose()
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+    <Dialog open={isOpen} onOpenChange={handleCloseModal}>
+      <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Mail className="h-5 w-5 text-blue-500" />
-            Subscribe to DevPulse
+            <MailCheck className="h-6 w-6 text-primary" /> Subscribe to our Newsletter
           </DialogTitle>
-          <DialogDescription>
-            Get the daily digest in your inbox. The best tech news, curated and summarized.
-          </DialogDescription>
+          <DialogDescription>Get the latest tech news and updates delivered straight to your inbox.</DialogDescription>
         </DialogHeader>
-
-        {!isSubmitted ? (
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email address</Label>
+        {subscribed ? (
+          <div className="text-center py-6 space-y-4">
+            <MailCheck className="h-16 w-16 text-green-500 mx-auto" />
+            <h3 className="text-xl font-semibold">You're All Set!</h3>
+            <p className="text-muted-foreground">Thank you for subscribing. Check your inbox for a confirmation.</p>
+            <Button onClick={handleCloseModal}>Close</Button>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
                 type="email"
-                placeholder="developer@example.com"
+                placeholder="your@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
               />
             </div>
-
-            <div className="space-y-3">
-              <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? "Subscribing..." : "Subscribe to Newsletter"}
-              </Button>
-
-              <div className="text-xs text-muted-foreground text-center space-y-1">
-                <p>• Daily digest delivered at 8 AM</p>
-                <p>• Unsubscribe anytime</p>
-                <p>• No spam, just quality content</p>
-              </div>
-            </div>
+            <Button type="submit" disabled={loading}>
+              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Subscribe
+            </Button>
           </form>
-        ) : (
-          <div className="text-center space-y-4 py-4">
-            <CheckCircle className="h-12 w-12 text-green-500 mx-auto" />
-            <div className="space-y-2">
-              <h3 className="font-semibold">You're all set!</h3>
-              <p className="text-sm text-muted-foreground">
-                Welcome to DevPulse. Your first digest will arrive tomorrow morning.
-              </p>
-            </div>
-          </div>
         )}
       </DialogContent>
     </Dialog>

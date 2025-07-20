@@ -9,45 +9,68 @@ export interface NewsItem {
   sourceIcon?: string
 }
 
+// This file defines the external news sources that DevPulse will fetch articles from.
+// Each source includes a name, a URL to its API or RSS feed, and an icon.
+// You can add or remove sources as needed.
+export const newsSources = [
+  {
+    name: "Hacker News",
+    url: "https://hn.algolia.com/api/v1/search_by_date?tags=story&hitsPerPage=10", // Example: Algolia API for Hacker News
+    icon: "🔥",
+  },
+  {
+    name: "TechCrunch",
+    url: "https://techcrunch.com/wp-json/wp/v2/posts?per_page=10", // Example: WordPress REST API
+    icon: "🚀",
+  },
+  {
+    name: "Dev.to",
+    url: "https://dev.to/api/articles?per_page=10", // Example: Dev.to API
+    icon: "💻",
+  },
+  {
+    name: "Smashing Magazine",
+    url: "https://www.smashingmagazine.com/wp-json/wp/v2/posts?per_page=10", // Example: WordPress REST API
+    icon: "🎨",
+  },
+  {
+    name: "CSS-Tricks",
+    url: "https://css-tricks.com/wp-json/wp/v2/posts?per_page=10", // Example: WordPress REST API
+    icon: "💅",
+  },
+  // Add more sources here
+  // {
+  //   name: "Example Blog",
+  //   url: "https://example.com/api/articles",
+  //   icon: "📝",
+  // },
+]
+
 // Hacker News API integration
 export async function fetchHackerNews(): Promise<NewsItem[]> {
   try {
     console.log("🔥 Fetching Hacker News top stories...")
 
-    // Get top stories
-    const topStoriesRes = await fetch("https://hacker-news.firebaseio.com/v0/topstories.json")
-    if (!topStoriesRes.ok) {
-      throw new Error(`Hacker News API error: ${topStoriesRes.status}`)
+    const response = await fetch("https://hn.algolia.com/api/v1/search_by_date?tags=story&hitsPerPage=10")
+    if (!response.ok) {
+      throw new Error(`Hacker News API error: ${response.status}`)
     }
 
-    const topStoryIds = await topStoriesRes.json()
-    console.log(`Got ${topStoryIds.length} story IDs from Hacker News`)
+    const data = await response.json()
+    console.log(`Got ${data.hits.length} story IDs from Hacker News`)
 
-    // Get first 15 stories
-    const storyPromises = topStoryIds.slice(0, 15).map(async (id: number) => {
-      try {
-        const storyRes = await fetch(`https://hacker-news.firebaseio.com/v0/item/${id}.json`)
-        if (!storyRes.ok) return null
-        return storyRes.json()
-      } catch (error) {
-        console.error(`Error fetching story ${id}:`, error)
-        return null
-      }
-    })
-
-    const stories = await Promise.all(storyPromises)
-    const validStories = stories.filter((story) => story && story.url && story.title && story.score > 50)
+    const validStories = data.hits.filter((story: any) => story.url && story.title && story.points > 50)
 
     console.log(`✅ Got ${validStories.length} valid stories from Hacker News`)
 
-    return validStories.map((story) => ({
+    return validStories.map((story: any) => ({
       title: story.title,
       url: story.url,
       source: "Hacker News",
-      author: story.by,
-      score: story.score,
+      author: story.author,
+      score: story.points,
       tags: categorizeArticle(story.title),
-      summary: generateBasicSummary(story.title, story.score, story.by, "Hacker News"),
+      summary: generateBasicSummary(story.title, story.points, story.author, "Hacker News"),
       sourceIcon: "🔥",
     }))
   } catch (error) {
@@ -66,11 +89,11 @@ export async function fetchGitHubTrending(): Promise<NewsItem[]> {
     const dateString = lastWeek.toISOString().split("T")[0]
 
     const response = await fetch(
-      `https://api.github.com/search/repositories?q=created:>${dateString}&sort=stars&order=desc&per_page=15`,
+      `https://api.github.com/search/repositories?q=created:>${dateString}&sort=stars&order=desc&per_page=10`,
       {
         headers: {
           Accept: "application/vnd.github.v3+json",
-          "User-Agent": "DevPulse-News-Aggregator",
+          "User-Agent": "DevPulse-News-Agregator",
         },
       },
     )
@@ -105,7 +128,7 @@ export async function fetchDevTo(): Promise<NewsItem[]> {
   try {
     console.log("💎 Fetching Dev.to articles...")
 
-    const response = await fetch("https://dev.to/api/articles?top=7&per_page=15")
+    const response = await fetch("https://dev.to/api/articles?per_page=10")
     if (!response.ok) {
       throw new Error(`Dev.to API error: ${response.status}`)
     }
@@ -129,7 +152,7 @@ export async function fetchDevTo(): Promise<NewsItem[]> {
           "Dev.to",
           article.description,
         ),
-        sourceIcon: "💎",
+        sourceIcon: "💻",
       }))
   } catch (error) {
     console.error("❌ Error fetching Dev.to:", error)
@@ -191,6 +214,21 @@ function generateBasicSummary(
       `Developer article by ${author} with ${score} reactions. ${description || extractKeywords(title)}.`,
       `Community favorite: ${extractKeywords(title)}. ${score} developers found this helpful.`,
       `Popular dev article with ${score} reactions. ${description || "Worth reading for developers."}.`,
+    ],
+    TechCrunch: [
+      `TechCrunch article by ${author} with ${score} reactions. ${description || extractKeywords(title)}.`,
+      `Latest tech news: ${extractKeywords(title)}. ${score} readers found this insightful.`,
+      `Hot topic on TechCrunch: ${extractKeywords(title)}. ${score} reactions and discussions.`,
+    ],
+    "Smashing Magazine": [
+      `Smashing Magazine article by ${author} with ${score} reactions. ${description || extractKeywords(title)}.`,
+      `Design and web development insights: ${extractKeywords(title)}. ${score} readers found this helpful.`,
+      `Popular design article with ${score} reactions. ${description || "Worth reading for designers."}.`,
+    ],
+    "CSS-Tricks": [
+      `CSS-Tricks article by ${author} with ${score} reactions. ${description || extractKeywords(title)}.`,
+      `Web design and CSS tips: ${extractKeywords(title)}. ${score} readers found this useful.`,
+      `Popular CSS article with ${score} reactions. ${description || "Worth reading for web developers."}.`,
     ],
   }
 
@@ -256,6 +294,7 @@ function categorizeArticle(title: string): string[] {
     Database: ["database", "sql", "mongodb", "postgres", "redis", "elasticsearch"],
     Blockchain: ["blockchain", "crypto", "bitcoin", "ethereum", "web3", "nft", "defi", "smart contract", "tokenomics"],
     "Open Source": ["open source", "github", "license", "contribution", "community"],
+    Design: ["design", "ui", "ux", "web design", "graphic design"],
   }
 
   const titleLower = title.toLowerCase()

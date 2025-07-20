@@ -1,81 +1,67 @@
-# DevPulse: Developer-Focused Tech News Aggregator
+# DevPulse
 
-![DevPulse Logo](public/placeholder.svg?height=100&width=100&query=DevPulse%20Logo)
+DevPulse is your personalized hub for staying updated with the latest in tech news and development. It aggregates articles from various sources, allowing you to customize your feed, save articles for later, and track your reading progress.
 
-DevPulse is a modern, developer-focused tech news aggregator designed to help busy engineers stay updated with the most important news without getting overwhelmed. It curates and summarizes content from various trusted sources like Hacker News, GitHub Trending, and Dev.to, delivering essential updates directly to your feed and inbox.
+## Features
 
-## ✨ Features
+-   **Personalized News Feed**: Tailor your feed by selecting preferred sources and tags.
+-   **Save for Later**: Bookmark articles to read at your convenience.
+-   **Reading Progress**: Track how much of an article you've read.
+-   **User Authentication**: Securely manage your account with email verification and password reset.
+-   **Responsive Design**: Access DevPulse seamlessly on any device.
+-   **Newsletter**: Subscribe to a daily digest of top tech articles.
 
-*   **Smart Curation**: AI-powered curation to filter noise and highlight relevant tech news.
-*   **Time-Saving Summaries**: Get key points of articles in 2-3 sentences.
-*   **Multiple Sources**: Aggregates content from Hacker News, GitHub Trending, and Dev.to.
-*   **Daily Digest**: Optional daily newsletter delivery of top stories to your inbox.
-*   **User Authentication**: Secure sign-up and sign-in with email/password.
-*   **Saved Articles**: Users can save articles for later reading.
-*   **Admin Panel**: Dedicated section for administrators to manage articles, view stats, and trigger newsletter sends.
-*   **Responsive Design**: Optimized for both desktop and mobile devices.
-*   **Theme Toggle**: Switch between light and dark modes.
+## Technologies Used
 
-## 🚀 Tech Stack
+-   **Next.js 14**: React framework for production.
+-   **React Server Components (RSCs)**: For improved performance and SEO.
+-   **TypeScript**: For type safety.
+-   **Tailwind CSS**: For rapid UI development.
+-   **shadcn/ui**: Reusable UI components.
+-   **MongoDB**: NoSQL database for data storage.
+-   **Resend**: For sending transactional emails (email verification, password reset, newsletters).
+-   **Vercel**: Deployment platform.
 
-*   **Framework**: [Next.js 14](https://nextjs.org/) (App Router, Server Components, Server Actions)
-*   **Language**: [TypeScript](https://www.typescriptlang.org/)
-*   **Styling**: [Tailwind CSS](https://tailwindcss.com/)
-*   **UI Components**: [shadcn/ui](https://ui.shadcn.com/)
-*   **Database**: [MongoDB Atlas](https://www.mongodb.com/atlas)
-*   **Authentication**: JWT (JSON Web Tokens)
-*   **AI Summaries (Optional)**: [OpenAI API](https://openai.com/docs/api/) via [AI SDK](https://sdk.vercel.ai/) [^3]
-*   **Email Service (Optional)**: [Resend](https://resend.com/)
-*   **Deployment**: [Vercel](https://vercel.com/)
+## Getting Started
 
-## ⚙️ Getting Started
+### 1. Clone the repository
 
-Follow these steps to set up and run DevPulse locally.
+\`\`\`bash
+git clone https://github.com/your-repo/devpulse.git
+cd devpulse
+\`\`\`
 
-### Prerequisites
+### 2. Install dependencies
 
-*   Node.js (v18.x or higher)
-*   npm or yarn
-*   MongoDB Atlas account (or a local MongoDB instance)
-*   (Optional) OpenAI API Key for AI summaries
-*   (Optional) Resend API Key for newsletters
+\`\`\`bash
+npm install
+# or
+yarn install
+# or
+pnpm install
+\`\`\`
 
-### Installation
+### 3. Set up Environment Variables
 
-1.  **Clone the repository:**
-
-    \`\`\`bash
-    git clone <your-repository-url>
-    cd devpulse
-    \`\`\`
-
-2.  **Install dependencies:**
-
-    \`\`\`bash
-    npm install
-    # or
-    yarn install
-    \`\`\`
-
-### Environment Variables
-
-Create a `.env.local` file in the root of your project and add the following environment variables. You can copy the content from `.env.local.example`:
+Create a `.env.local` file in the root of your project and add the following environment variables:
 
 ```plaintext
-# Copy this file to .env.local and fill in your values
+# MongoDB Connection URI
+# Replace with your MongoDB Atlas connection string
+MONGODB_URI="mongodb+srv://<username>:<password>@<cluster-url>/devpulse?retryWrites=true&w=majority"
 
-# MongoDB Connection String (Required)
-# Make sure to replace <username>, <password>, and <cluster-url>
-MONGODB_URI=mongodb+srv://<username>:<password>@<cluster-url>/devpulse?retryWrites=true&w=majority&appName=devpulse
+# JWT Secret for authentication tokens
+JWT_SECRET="your_super_secret_jwt_key_here"
 
-# JWT Secret for Authentication (Required)
-JWT_SECRET=your_super_secret_jwt_key_here_make_it_long_and_random
+# Resend API Key for email services (verification, password reset)
+# Get one from https://resend.com/
+RESEND_API_KEY="re_YOUR_RESEND_API_KEY"
 
-# OpenAI API Key for AI Summaries (Optional)
-OPENAI_API_KEY=sk-your_openai_api_key_here
+# Public URL for your application (used in email links)
+# For local development, use http://localhost:3000
+# For Vercel deployments, Vercel automatically sets VERCEL_URL
+NEXT_PUBLIC_APP_URL="http://localhost:3000"
 
-# Resend API Key for Newsletters (Optional)
-RESEND_API_KEY=re_your_resend_api_key_here
-
-# Admin Email (Required)
-NEXT_PUBLIC_ADMIN_EMAIL=your-admin-email@example.com
+# Optional: Internal API Key for cron jobs or internal services (e.g., newsletter send)
+# This should be a strong, randomly generated string.
+INTERNAL_API_KEY="your_internal_api_key_for_cron_jobs"

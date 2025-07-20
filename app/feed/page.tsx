@@ -1,59 +1,119 @@
 "use client"
 
 import type React from "react"
-import type { Article } from "@/types/article" // Declare the Article variable
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { RefreshCw, Search, X, Loader2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/components/auth-provider"
 import { Input } from "@/components/ui/input"
 import { ArticleList } from "@/components/article-list"
+import { fetchArticles, fetchSavedArticles } from "@/lib/server-actions"
 
-const filters = ["All", "Hacker News", "GitHub", "Dev.to"] // Re-added "Crypto News"
+interface Article {
+  _id: string
+  title: string
+  summary: string
+  url: string
+  source: string
+  tags: string[]
+  author?: string
+  score: number
+  sourceIcon?: string
+  createdAt: string
+}
+
+interface SavedArticle {
+  _id: string
+  articleId: string
+  userId: string
+  createdAt: string
+  readProgress?: number
+  lastReadAt?: string
+}
+
+const filters = ["All", "Hacker News", "GitHub", "Dev.to"]
+const ARTICLES_PER_PAGE = 10
 
 export default function FeedPage() {
   const [articles, setArticles] = useState<Article[]>([])
-  const [loading, setLoading] = useState(true)
+  const [savedArticles, setSavedArticles] = useState<SavedArticle[]>([])
+  const [loading, setLoading] = useState(false)
   const [updating, setUpdating] = useState(false)
   const [activeFilter, setActiveFilter] = useState("All")
-  const [savedItems, setSavedItems] = useState(new Set<string>())
+  const [searchQuery, setSearchQuery] = useState("")
+  const [searchResults, setSearchResults] = useState<Article[] | null>(null)
+  const [hasMore, setHasMore] = useState(true)
   const { toast } = useToast()
   const { user } = useAuth()
-  const [searchQuery, setSearchQuery] = useState("")
-  const [searchResults, setSearchResults] = useState<Article[] | null>(null) // Null means no search active
 
-  // Fetch articles from API
-  const fetchArticles = async (source?: string) => {
-    try {
+  useEffect(() => {
+    async function initialize() {
       setLoading(true)
-      let url = `/api/articles?limit=50`
+      try {
+        const [articlesData, savedArticlesData] = await Promise.all([
+          fetchArticles(0),
+          fetchSavedArticles(),
+        ])
+        setArticles(articlesData.articles)
+        setHasMore(articlesData.hasMore)
+        setSavedArticles(savedArticlesData)
+      } catch (error) {
+        console.error("Error initializing feed:", error)
+        toast({
+          title: "Error",
+          description: "Failed to load initial data",
+          variant: "destructive",
+        })
+      } finally {
+        setLoading(false)
+      }
+    }
+    initialize()
+  }, [user, activeFilter])
 
-      // Add source filter from UI (if not "All")
+  const fetchMoreArticles = async (offset: number) => {
+    try {
+      const response = await fetchArticles(offset)
+      return response
+    } catch (error) {
+      console.error("Error fetching more articles:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load more articles",
+        variant: "destructive",
+      })
+      throw error
+    }
+  }
+
+  const fetchArticlesClient = async (source?: string) => {
+    if (searchQuery) return
+    setLoading(true)
+    try {
+      let url = `/api/articles?offset=0&limit=${ARTICLES_PER_PAGE}`
+
       if (source && source !== "All") {
         url += `&source=${encodeURIComponent(source)}`
       }
 
-      // Add user preferences if logged in
       if (user) {
         const preferencesResponse = await fetch("/api/user/preferences", {
           credentials: "include",
           headers: {
+            "Content-Type": "application/json",
             Cookie: document.cookie,
           },
         })
         if (preferencesResponse.ok) {
-          const preferencesData = await preferencesResponse.json()
-          const userPreferences = preferencesData.preferences
-          if (userPreferences) {
-            // Filter out "All" from preferred sources before sending to API
-            const actualPreferredSources = (userPreferences.sources || []).filter((s: string) => s !== "All")
+          const { preferences } = await preferencesResponse.json()
+          if (preferences) {
+            const actualPreferredSources = (preferences.sources || []).filter((s: string) => s !== "All")
             if (actualPreferredSources.length > 0) {
               url += `&preferredSources=${encodeURIComponent(actualPreferredSources.join(","))}`
             }
-            if (userPreferences.tags && userPreferences.tags.length > 0) {
-              url += `&preferredTags=${encodeURIComponent(userPreferences.tags.join(","))}`
+            if (preferences.tags && preferences.tags.length > 0) {
+              url += `&preferredTags=${encodeURIComponent(preferences.tags.join(","))}`
             }
           }
         } else {
@@ -61,11 +121,18 @@ export default function FeedPage() {
         }
       }
 
-      const response = await fetch(url)
+      const response = await fetch(url, {
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          Cookie: document.cookie,
+        },
+      })
       const data = await response.json()
 
       if (response.ok) {
         setArticles(data.articles || [])
+        setHasMore(data.hasMore || data.articles.length === ARTICLES_PER_PAGE)
       } else {
         toast({
           title: "Error",
@@ -85,7 +152,6 @@ export default function FeedPage() {
     }
   }
 
-  // Update articles (fetch new ones from sources)
   const updateArticles = async () => {
     try {
       setUpdating(true)
@@ -96,6 +162,11 @@ export default function FeedPage() {
 
       const response = await fetch("/api/articles", {
         method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          Cookie: document.cookie,
+        },
       })
       const data = await response.json()
 
@@ -104,8 +175,7 @@ export default function FeedPage() {
           title: "Success!",
           description: `Updated with ${data.total} articles (${data.inserted} new, ${data.modified} updated)`,
         })
-        // Refresh the current view
-        await fetchArticles(activeFilter)
+        await fetchArticlesClient(activeFilter)
       } else {
         toast({
           title: "Error",
@@ -128,17 +198,24 @@ export default function FeedPage() {
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!searchQuery.trim()) {
-      setSearchResults(null) // Clear search if query is empty
+      setSearchResults(null)
       return
     }
 
     setLoading(true)
     try {
-      const response = await fetch(`/api/search?query=${encodeURIComponent(searchQuery)}`)
+      const response = await fetch(`/api/search?query=${encodeURIComponent(searchQuery)}`, {
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          Cookie: document.cookie,
+        },
+      })
       const data = await response.json()
 
       if (response.ok) {
         setSearchResults(data.articles || [])
+        setHasMore(false)
       } else {
         toast({
           title: "Search Error",
@@ -158,130 +235,23 @@ export default function FeedPage() {
     }
   }
 
-  // Load articles on component mount and filter change
   useEffect(() => {
     if (!searchQuery) {
-      fetchArticles(activeFilter)
+      fetchArticlesClient(activeFilter)
     }
-  }, [activeFilter, searchQuery, user])
-
-  // Load saved articles for authenticated users
-  useEffect(() => {
-    if (user) {
-      fetchSavedArticles()
-    }
-  }, [user])
-
-  const fetchSavedArticles = async () => {
-    if (!user) return
-
-    try {
-      console.log("Fetching saved articles for user:", user.email)
-      const response = await fetch("/api/saved", {
-        credentials: "include", // Include cookies
-        headers: {
-          Cookie: document.cookie,
-        },
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        console.log("Saved articles response:", data)
-        const savedIds = new Set(data.savedArticles?.map((item: any) => item.article._id) || [])
-        console.log("Saved article IDs:", Array.from(savedIds))
-        setSavedItems(savedIds)
-      } else {
-        const errorData = await response.json()
-        console.error("Failed to fetch saved articles:", errorData)
-      }
-    } catch (error) {
-      console.error("Error fetching saved articles:", error)
-    }
-  }
-
-  const toggleSave = async (articleId: string) => {
-    if (!user) {
-      toast({
-        title: "Sign in required",
-        description: "Please sign in to save articles",
-        variant: "destructive",
-      })
-      return
-    }
-
-    try {
-      console.log(`Toggling save for article: ${articleId}`)
-      const isSaved = savedItems.has(articleId)
-      const method = isSaved ? "DELETE" : "POST"
-
-      console.log(`${isSaved ? "Removing" : "Saving"} article ${articleId}`)
-
-      const response = await fetch("/api/saved", {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-          // Ensure cookies are sent
-          Cookie: document.cookie,
-        },
-        credentials: "include", // Include cookies
-        body: JSON.stringify({ articleId }),
-      })
-
-      const data = await response.json()
-      console.log("Save response:", data)
-
-      if (response.ok) {
-        const newSavedItems = new Set(savedItems)
-        if (isSaved) {
-          newSavedItems.delete(articleId)
-          toast({ description: "Article removed from saved items" })
-        } else {
-          newSavedItems.add(articleId)
-          toast({ description: "Article saved successfully" })
-        }
-        setSavedItems(newSavedItems)
-      } else {
-        console.error("Save failed:", data)
-        toast({
-          title: "Error",
-          description: data.error || "Failed to save article",
-          variant: "destructive",
-        })
-      }
-    } catch (error) {
-      console.error("Error toggling save:", error)
-      toast({
-        title: "Error",
-        description: "Failed to save article",
-        variant: "destructive",
-      })
-    }
-  }
-
-  const handleShare = (title: string, url: string) => {
-    const shareText = `${title} - ${url}`
-    navigator.clipboard.writeText(shareText)
-    toast({
-      description: "Link copied to clipboard",
-    })
-  }
-
-  const openArticle = (url: string) => {
-    window.open(url, "_blank", "noopener,noreferrer")
-  }
+  }, [activeFilter, searchQuery])
 
   return (
     <div className="flex flex-col h-screen">
-      {/* Header */}
       <div className="sticky top-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border/40">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-6 gap-4">
           <div className="min-w-0">
             <h1 className="text-xl sm:text-2xl font-bold truncate">Tech News Feed</h1>
             <p className="text-sm sm:text-base text-muted-foreground">
-              {loading ? "Loading..." : `${articles.length} articles from the developer community`}
+              {loading ? "Loading..." : `${(searchResults || articles).length} articles from the developer community`}
             </p>
           </div>
-          <Button onClick={updateArticles} disabled={updating} size="sm" className="gap-2 shrink-0">
+          <Button onClick={updateArticles} disabled={updating || loading} size="sm" className="gap-2 shrink-0">
             <RefreshCw className={`h-4 w-4 ${updating ? "animate-spin" : ""}`} />
             <span className="hidden sm:inline">{updating ? "Updating..." : "Update Feed"}</span>
             <span className="sm:hidden">{updating ? "..." : "Update"}</span>
@@ -293,6 +263,7 @@ export default function FeedPage() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="flex-1"
+              disabled={loading}
             />
             <Button type="submit" size="sm" disabled={loading}>
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
@@ -305,8 +276,10 @@ export default function FeedPage() {
                 onClick={() => {
                   setSearchQuery("")
                   setSearchResults(null)
+                  fetchArticlesClient(activeFilter)
                 }}
                 className="h-9 w-9 p-0"
+                disabled={loading}
               >
                 <X className="h-4 w-4" />
                 <span className="sr-only">Clear search</span>
@@ -315,7 +288,6 @@ export default function FeedPage() {
           </form>
         </div>
 
-        {/* Filter Bar */}
         <div className="px-4 sm:px-6 pb-4">
           <div className="flex gap-2 overflow-x-auto scrollbar-hide">
             {filters.map((filter) => (
@@ -325,6 +297,7 @@ export default function FeedPage() {
                 size="sm"
                 onClick={() => setActiveFilter(filter)}
                 className="whitespace-nowrap shrink-0"
+                disabled={loading}
               >
                 {filter}
               </Button>
@@ -333,40 +306,18 @@ export default function FeedPage() {
         </div>
       </div>
 
-      {/* News Grid */}
-      <div className="flex-1 overflow-auto p-4 sm:p-6">
+      <div className="flex-1 overflow-auto">
         {loading ? (
-          <div className="grid gap-4 sm:gap-6 grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 max-w-7xl mx-auto">
-            {[...Array(6)].map((_, i) => (
-              <Card key={i} className="border-border/40 animate-pulse">
-                <CardHeader className="pb-3">
-                  <div className="h-4 bg-muted rounded w-1/3 mb-2"></div>
-                  <div className="h-6 bg-muted rounded w-full"></div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="h-4 bg-muted rounded w-full"></div>
-                  <div className="h-4 bg-muted rounded w-2/3"></div>
-                  <div className="flex gap-2">
-                    <div className="h-6 bg-muted rounded w-16"></div>
-                    <div className="h-6 bg-muted rounded w-20"></div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+          <div className="flex justify-center items-center h-[60vh]">
+            <Loader2 className="h-8 w-8 animate-spin" />
           </div>
         ) : (
           <ArticleList
-            articles={searchResults !== null ? searchResults : articles}
-            isSearch={searchResults !== null}
-            searchQuery={searchQuery}
-            activeFilter={activeFilter}
-            updateArticles={updateArticles}
-            toggleSave={toggleSave}
-            savedItems={savedItems}
-            handleShare={handleShare}
-            openArticle={openArticle}
-            user={user}
-            updating={updating}
+            initialArticles={searchResults || articles}
+            initialSavedArticles={savedArticles}
+            hasMore={hasMore}
+            fetchMoreArticles={fetchMoreArticles}
+            onSavedArticlesChange={setSavedArticles}
           />
         )}
       </div>

@@ -9,9 +9,7 @@ export default function AboutPage() {
       {/* Header */}
       <div className="border-b border-border/40">
         <div className="p-6">
-          <h1 className="text-2xl font-bold">About DevPulse</h1>
-          <p className="text-muted-foreground">The developer-focused tech news aggregator built for busy engineers</p>
-        </div>
+          </div>
       </div>
 
       {/* Content */}

@@ -1,45 +1,48 @@
+// This script creates a text index on the 'articles' collection in MongoDB.
+// A text index is necessary for efficient full-text search queries.
+// Run this script once after setting up your MongoDB database.
+
 import { MongoClient } from "mongodb"
-import dotenv from "dotenv" // Import dotenv
 
-dotenv.config({ path: "./.env.local" }) // Load .env.local file
+const MONGODB_URI = process.env.MONGODB_URI
+const DB_NAME = "devpulse"
+const COLLECTION_NAME = "articles"
 
-const uri = process.env.MONGODB_URI
-
-if (!uri) {
-  console.error("Error: MONGODB_URI environment variable is not set.")
+if (!MONGODB_URI) {
+  console.error("MONGODB_URI environment variable is not set.")
   process.exit(1)
 }
 
 async function createTextIndex() {
   let client
   try {
-    client = new MongoClient(uri)
-    console.log("Attempting to connect to MongoDB...")
+    client = new MongoClient(MONGODB_URI)
     await client.connect()
-    console.log("Successfully connected to MongoDB!")
+    const db = client.db(DB_NAME)
+    const collection = db.collection(COLLECTION_NAME)
 
-    const db = client.db("devpulse")
-    const articlesCollection = db.collection("articles")
+    console.log(`Attempting to create text index on '${COLLECTION_NAME}' collection...`)
 
-    console.log('Creating text index on "title", "summary", and "tags" fields...')
-    await articlesCollection.createIndex(
+    // Create a text index on the 'title' and 'summary' fields
+    // The 'weights' option gives more importance to matches in the title.
+    const result = await collection.createIndex(
       { title: "text", summary: "text", tags: "text" },
-      { name: "article_text_index" },
+      { name: "article_text_index", weights: { title: 10, summary: 5, tags: 3 } },
     )
-    console.log('Text index "article_text_index" created successfully!')
 
-    // Verify index creation
-    const indexes = await articlesCollection.indexes()
-    console.log(
-      "Current indexes on articles collection:",
-      indexes.map((idx) => idx.name),
-    )
+    console.log(`Text index created successfully: ${result}`)
+    console.log("You can now perform full-text searches on the title, summary, and tags fields.")
   } catch (error) {
-    console.error("Error creating text index:", error)
+    if (error.code === 85) {
+      // 85 is the error code for "Index already exists"
+      console.warn("Text index already exists on the collection. Skipping creation.")
+    } else {
+      console.error("Error creating text index:", error)
+      process.exit(1)
+    }
   } finally {
     if (client) {
       await client.close()
-      console.log("MongoDB connection closed.")
     }
   }
 }

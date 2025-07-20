@@ -127,6 +127,68 @@ export async function fetchDevTo(): Promise<NewsItem[]> {
   }
 }
 
+// TechCrunch API integration
+export async function fetchTechCrunch(): Promise<NewsItem[]> {
+  try {
+    console.log("Fetching TechCrunch articles...")
+
+    const response = await fetch("https://techcrunch.com/wp-json/wp/v2/posts?per_page=5")
+    if (!response.ok) {
+      throw new Error(`TechCrunch API error: ${response.status}`)
+    }
+
+    const articles = await response.json()
+    console.log(`Got ${articles.length} articles from TechCrunch`)
+
+    return articles.map((article: any) => ({
+      title: article.title.rendered,
+      url: article.link,
+      source: "TechCrunch",
+      author: article._embedded.author[0].name,
+      score: null, // TechCrunch does not provide a score
+      tags: categorizeArticle(article.title.rendered),
+      summary: article.excerpt.rendered,
+      sourceIcon: "🚀",
+    }))
+  } catch (error) {
+    console.error("Error fetching TechCrunch:", error)
+    return []
+  }
+}
+
+// The Verge RSS feed integration
+export async function fetchTheVerge(): Promise<NewsItem[]> {
+  try {
+    console.log("Fetching The Verge articles...")
+
+    const response = await fetch("https://www.theverge.com/rss/index.xml")
+    if (!response.ok) {
+      throw new Error(`The Verge API error: ${response.status}`)
+    }
+
+    const xml = await response.text()
+    const parser = new DOMParser()
+    const xmlDoc = parser.parseFromString(xml, "application/xml")
+
+    const items = xmlDoc.getElementsByTagName("item")
+    console.log(`Got ${items.length} articles from The Verge`)
+
+    return Array.from(items).map((item) => ({
+      title: item.getElementsByTagName("title")[0].childNodes[0].nodeValue,
+      url: item.getElementsByTagName("link")[0].childNodes[0].nodeValue,
+      source: "The Verge",
+      author: null, // The Verge does not provide author information in RSS feed
+      score: null, // The Verge does not provide a score
+      tags: categorizeArticle(item.getElementsByTagName("title")[0].childNodes[0].nodeValue),
+      summary: item.getElementsByTagName("description")[0].childNodes[0].nodeValue,
+      sourceIcon: "📱",
+    }))
+  } catch (error) {
+    console.error("Error fetching The Verge:", error)
+    return []
+  }
+}
+
 // Simple categorization based on keywords
 function categorizeArticle(title: string): string[] {
   const categories = {
@@ -152,3 +214,16 @@ function categorizeArticle(title: string): string[] {
 
   return tags.length > 0 ? tags.slice(0, 3) : ["Tech"]
 }
+
+export const newsSourcesSimple = [
+  {
+    name: "TechCrunch",
+    url: "https://techcrunch.com/wp-json/wp/v2/posts?per_page=5", // Example API endpoint
+    icon: "🚀",
+  },
+  {
+    name: "The Verge",
+    url: "https://www.theverge.com/rss/index.xml", // RSS feed, would need parsing
+    icon: "📱",
+  },
+]
